@@ -50,9 +50,9 @@
     <Compile Include="ExcelElement\IExcelElement.cs" />
     <Compile Include="ExcelElement\ValueElement.cs" />
     <Compile Include="ExcelTemplateParser.cs" />
-    <Compile Include="ExcelRenderer.cs" />
     <Compile Include="ExcelService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utils.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

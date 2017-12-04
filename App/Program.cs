@@ -19,21 +19,9 @@ namespace App
             Console.WriteLine($"template file: {templateFile.FullName}");
             Console.WriteLine($"output file: {outputFile.FullName}");
             ExcelService excelService = new ExcelService();
-            excelService.TEST(templateFile,outputFile,QTSC_Hash());
+            excelService.Render(templateFile,outputFile,QTSC_Hash());
             Console.WriteLine("Complete");
-//            Console.WriteLine("Press anykey to continue !");
-//            Console.ReadKey();
         }
-
-//        public static void Main(string[] args)
-//        {
-//            Template template = Template.Parse(File.ReadAllText("template.txt"));
-//            var data = GetDataHash();
-//            String rendered = template.Render(data);
-//            Console.WriteLine("Press anykey to continue !");
-//            Console.ReadKey();
-//        }
-//        
 
         private static Hash QTSC_Hash()
         {

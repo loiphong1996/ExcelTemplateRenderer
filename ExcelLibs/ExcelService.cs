@@ -15,9 +15,7 @@ namespace ExcelLibs
 {
     public class ExcelService
     {
-        //TODO when the content of output have more rows than original temlate 
-        //TODO clean up all value before apply any value
-        public void TEST(FileInfo templateFile, FileInfo outputFile, Hash data)
+        public void Render(FileInfo templateFile, FileInfo outputFile, Hash data)
         {
             using (var template = new ExcelPackage(templateFile))
             {
@@ -27,13 +25,9 @@ namespace ExcelLibs
                     {
                         var templateSheet = template.Workbook.Worksheets[i];
                         var outputSheet = output.Workbook.Worksheets[i];
-                        var parser = new ExcelTemplateParser(templateSheet, data);
-                        var templateString = parser.ParseToTemplateText();
-                        var dataString = parser.AppliedDataToTemplateText(templateString);
-                        var elements = parser.ParseToExcelElements(dataString);
-                        parser.Apply(templateSheet, outputSheet, elements);
+                        var parser = new ExcelTemplateParser(templateSheet,outputSheet, data);
+                        parser.Render();
                     }
-
                     output.Save();
                 }
             }

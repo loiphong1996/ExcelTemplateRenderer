@@ -13,17 +13,27 @@ namespace ExcelLibs
         private int _lastUsedRow;
         private int _lastUsedColumn;
         private Hash _dataHash;
-        private ExcelWorksheet _sheet;
+        private ExcelWorksheet _templateSheet;
+        private ExcelWorksheet _outputSheet;
 
-        public ExcelTemplateParser(ExcelWorksheet sheet, Hash dataHash)
+        public ExcelTemplateParser(ExcelWorksheet templateSheet,ExcelWorksheet outputSheet, Hash dataHash)
         {
-            _sheet = sheet;
+            _templateSheet = templateSheet;
+            _outputSheet = outputSheet;
             _dataHash = dataHash;
             _lastUsedRow = GetLastUsedRow();
-            _lastUsedColumn = sheet.Dimension.End.Column;
+            _lastUsedColumn = templateSheet.Dimension.End.Column;
         }
 
-        public IEnumerable<IExcelElement> ParseToExcelElements(string excelDataString)
+        public void Render()
+        {
+            var templateString = ParseToTemplateText();
+            var dataString = AppliedDataToTemplateText(templateString);
+            var elements = ParseToExcelElements(dataString);
+            Apply(_templateSheet, _outputSheet, elements);
+        }
+
+        private IEnumerable<IExcelElement> ParseToExcelElements(string excelDataString)
         {
             List<IExcelElement> result = new List<IExcelElement>();
             Queue<String> tokens = new Queue<String>(excelDataString.Split('\n'));
@@ -37,18 +47,18 @@ namespace ExcelLibs
                 {
                     result.Add(new ValueElement(tokens.Dequeue()));
                 }
-            }               
+            }
 
             return result;
         }
 
-        public String AppliedDataToTemplateText(string templateString)
+        private String AppliedDataToTemplateText(string templateString)
         {
             Template template = Template.Parse(templateString);
             return template.Render(_dataHash);
         }
 
-        public String ParseToTemplateText()
+        private String ParseToTemplateText()
         {
             StringBuilder stringBuilder = new StringBuilder();
             Stack<String> forloopAddressStack = new Stack<string>();
@@ -56,23 +66,24 @@ namespace ExcelLibs
             {
                 for (int c = 1; c <= _lastUsedColumn; c++)
                 {
-                    var cell = _sheet.Cells[r, c];
-                    
-                    if(cell.Value == null) continue;
-                    
-                    var cellValue = cell.Value.ToString().Replace("\n","\\n");
-//                    if (cell.Text.TrimStart().StartsWith("{% for") && cell.Text.TrimEnd().EndsWith("-%}"))
-                    if (cell.Text.TrimStart().StartsWith("{% for"))
+                    var cell = _templateSheet.Cells[r, c];
+
+                    if (cell.Value == null) continue;
+
+                    var cellValue = cell.Value.ToString().Replace("\n", "\\n");
+                    if (Utils.IsForloopStart(cellValue))
                     {
                         ExcelAddress forLoopAddress = GetForLoopAddress(new ExcelCellAddress(r, c));
+                        cellValue = cellValue.EndsWith(" %}") ? cellValue.Replace(" %}", " -%}") : cellValue;
                         stringBuilder.Append(cellValue + "\n");
                         stringBuilder.Append($"{ForloopElement.StartMarker}{forLoopAddress.Address}\n");
                         forloopAddressStack.Push(forLoopAddress.Address);
                     }
-                    else if (cell.Text.Trim().StartsWith("{% endfor"))
+                    else if (Utils.IsForloopEnd(cellValue))
                     {
                         var lastForloopAddress = forloopAddressStack.Pop();
                         stringBuilder.Append($"{lastForloopAddress}{ForloopElement.EndMarker}\n");
+                        cellValue = cellValue.EndsWith(" %}") ? cellValue.Replace(" %}", " -%}") : cellValue;
                         stringBuilder.Append(cellValue + "\n");
                     }
                     else if (!String.IsNullOrEmpty(cell.Text))
@@ -85,18 +96,16 @@ namespace ExcelLibs
             return stringBuilder.ToString().TrimEnd();
         }
 
-        public int Apply(ExcelWorksheet templateSheet,ExcelWorksheet outputSheet,IEnumerable<IExcelElement> elements)
+        private void Apply(ExcelWorksheet templateSheet, ExcelWorksheet outputSheet, IEnumerable<IExcelElement> elements)
         {
             int rowOffset = 0;
             foreach (var element in elements)
             {
-                int rowOffsetInner = element.SetupSpace(templateSheet,outputSheet,rowOffset);
-                element.ApplyStyle(templateSheet,outputSheet,rowOffset);
-                element.ApplyValue(templateSheet,outputSheet,rowOffset);
+                int rowOffsetInner = element.SetupSpace(templateSheet, outputSheet, rowOffset);
+                element.ApplyStyle(templateSheet, outputSheet, rowOffset);
+                element.ApplyValue(templateSheet, outputSheet, rowOffset);
                 rowOffset += rowOffsetInner;
             }
-
-            return rowOffset;
         }
 
         private ExcelAddress GetForLoopAddress(ExcelCellAddress startAddress)
@@ -104,16 +113,16 @@ namespace ExcelLibs
             ExcelAddress forLoopEndAddress = null;
             int numOfInnerForLoop = 0;
 
-            for (int r = startAddress.Row + 1; r <= _sheet.Dimension.End.Row; r++)
+            for (int r = startAddress.Row + 1; r <= _templateSheet.Dimension.End.Row; r++)
             {
-                var cellValue = _sheet.GetValue<String>(r, startAddress.Column);
+                var cellValue = _templateSheet.GetValue<String>(r, startAddress.Column);
                 if (cellValue != null)
                 {
-                    if (cellValue.TrimStart().StartsWith("{% for"))
+                    if (Utils.IsForloopStart(cellValue))
                     {
                         numOfInnerForLoop++;
                     }
-                    else if (cellValue.TrimStart().StartsWith("{% endfor"))
+                    else if (Utils.IsForloopEnd(cellValue))
                     {
                         if (numOfInnerForLoop == 0)
                         {
@@ -142,10 +151,10 @@ namespace ExcelLibs
 
         private int GetLastUsedRow()
         {
-            var row = _sheet.Dimension.End.Row;
+            var row = _templateSheet.Dimension.End.Row;
             while (row >= 1)
             {
-                var range = _sheet.Cells[row, 1, row, _sheet.Dimension.End.Column];
+                var range = _templateSheet.Cells[row, 1, row, _templateSheet.Dimension.End.Column];
                 if (range.Any(cell => !string.IsNullOrEmpty(cell.Text)))
                 {
                     break;
@@ -160,7 +169,7 @@ namespace ExcelLibs
         private ExcelAddress GetMergeCellAddress(ExcelCellAddress startAddress)
         {
             ExcelAddress address = null;
-            foreach (string mergedCell in _sheet.MergedCells)
+            foreach (string mergedCell in _templateSheet.MergedCells)
             {
                 var mergeredAddress = new ExcelAddress(mergedCell);
                 if (mergeredAddress.Start.Row == startAddress.Row &&
@@ -171,16 +180,11 @@ namespace ExcelLibs
                 }
             }
 
-            if (address == null)
-            {
-                address = new ExcelAddress(
-                    startAddress.Row,
-                    startAddress.Column,
-                    startAddress.Row,
-                    startAddress.Column);
-            }
-
-            return address;
+            return address ?? new ExcelAddress(
+                       startAddress.Row,
+                       startAddress.Column,
+                       startAddress.Row,
+                       startAddress.Column);
         }
     }
 }

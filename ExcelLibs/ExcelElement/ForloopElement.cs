@@ -84,21 +84,19 @@ namespace ExcelLibs
                 for (int c = _templateAddress.Start.Row; c <= _templateAddress.End.Column; c++)
                 {
                     var cellValue = templateSheet.GetValue<String>(r, c);
-                    if (cellValue == null)
+                    if (cellValue != null)
                     {
-                        break;
-                    }
+                        if (Utils.IsForloopStart(cellValue))
+                        {
+                            innerForLoopMarker = true;
+                            break;
+                        }
 
-                    if (cellValue.TrimStart().StartsWith("{% for"))
-                    {
-                        innerForLoopMarker = true;
-                        break;
-                    }
-
-                    if (cellValue.TrimStart().StartsWith("{% endfor -%}"))
-                    {
-                        innerForLoopMarker = false;
-                        break;
+                        if (Utils.IsForloopEnd(cellValue))
+                        {
+                            innerForLoopMarker = false;
+                            break;
+                        }
                     }
                 }
 
@@ -133,7 +131,7 @@ namespace ExcelLibs
             {
                 for (int c = _templateAddress.Start.Column; c <= _templateAddress.End.Column; c++)
                 {
-                    ExcelRangeBase templateRange = templateSheet.Cells[r, c]; 
+                    ExcelRangeBase templateRange = templateSheet.Cells[r, c];
                     ExcelRange outputRange = outputSheet.Cells[
                         templateRange.Start.Row + rowOffset,
                         templateRange.Start.Column,
@@ -141,8 +139,32 @@ namespace ExcelLibs
                         templateRange.End.Column
                     ];
                     outputRange.StyleID = templateRange.StyleID;
+
+                    ExcelAddress templateMergedAddress = GetMergedAddress(templateSheet, new ExcelCellAddress(r, c));
+                    if (templateMergedAddress != null)
+                    {
+                        ExcelAddress outputMergedAddress = new ExcelAddress(
+                            templateMergedAddress.Start.Row + rowOffset,
+                            templateMergedAddress.Start.Column,
+                            templateMergedAddress.End.Row + rowOffset,
+                            templateMergedAddress.End.Column);
+                        outputSheet.Cells[outputMergedAddress.Address].Merge = true;
+                    }
                 }
             }
+        }
+
+        private ExcelAddress GetMergedAddress(ExcelWorksheet templateSheet, ExcelCellAddress cellAddress)
+        {
+            foreach (string mergedCellAdress in templateSheet.MergedCells)
+            {
+                if (mergedCellAdress.Split(':')[0] == cellAddress.Address)
+                {
+                    return new ExcelAddress(mergedCellAdress);
+                }
+            }
+
+            return null;
         }
     }
 }

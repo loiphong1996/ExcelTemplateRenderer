@@ -37,21 +37,38 @@ namespace ExcelLibs
             outputSheet.SetValue(
                 _templateAddress.Row + rowOffset,
                 _templateAddress.Column,
-                _value.Replace("\\n","\n"));
+                _value.Replace("\\n", "\n"));
             return 0;
         }
 
         public void ApplyStyle(ExcelWorksheet templateSheet, ExcelWorksheet outputSheet, int rowOffset)
         {
-            CopyStyle(templateSheet.Cells[_templateAddress.Row, _templateAddress.Column],
-                outputSheet.Cells[_templateAddress.Row + rowOffset, _templateAddress.Column]);
-//            templateSheet.Cells[_templateAddress.Row,_templateAddress.Column].Copy(
-//                );
+            outputSheet.Cells[_templateAddress.Row + rowOffset, _templateAddress.Column].StyleID =
+                templateSheet.Cells[_templateAddress.Row, _templateAddress.Column].StyleID;
+            ExcelAddress templateMergedAddress = GetMergedAddress(templateSheet);
+            if (templateMergedAddress != null)
+            {
+                ExcelAddress outputMergedAddress = new ExcelAddress(
+                    templateMergedAddress.Start.Row + rowOffset,
+                    templateMergedAddress.Start.Column,
+                    templateMergedAddress.End.Row + rowOffset,
+                    templateMergedAddress.End.Column);
+                outputSheet.Cells[outputMergedAddress.Address].Merge = true;
+            }
+
         }
 
-        private void CopyStyle(ExcelRange templateCell, ExcelRange outputCell)
+        private ExcelAddress GetMergedAddress(ExcelWorksheet templateSheet)
         {
-            outputCell.StyleID = templateCell.StyleID;
+            foreach (string mergedCellAdress in templateSheet.MergedCells)
+            {
+                if (mergedCellAdress.Split(':')[0] == _templateAddress.Address)
+                {
+                    return new ExcelAddress(mergedCellAdress);
+                }
+            }
+
+            return null;
         }
     }
 }
